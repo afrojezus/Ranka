@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "http://example.com/example.json",
+  "type": "object",
+  "title": "The Responses schema",
+  "description": "The Responses JSON adjusts what Ranka will respond to regardless of prefix",
+  "default": {},
+  "examples": [
+    {
+      "communicationable_messages": [
+        {
+          "trigger": "<message trigger>",
+          "response": "<bot response>"
+        }
+      ]
+    }
+  ],
+  "required": [
+    "communicationable_messages"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "communicationable_messages": {
+      "$id": "#/properties/communicationable_messages",
+      "type": "array",
+      "title": "The communicationable_messages schema",
+      "description": "An explanation about the purpose of this instance.",
+      "default": [],
+      "examples": [
+        [
+          {
+            "trigger": "<message trigger>",
+            "response": "<bot response>"
+          }
+        ]
+      ],
+      "additionalItems": true,
+      "items": {
+        "anyOf": [
+          {
+            "$id": "#/properties/communicationable_messages/items/anyOf/0",
+            "type": "object",
+            "title": "Response object",
+            "description": "Response object holds a trigger string and a reponse string",
+            "default": {},
+            "examples": [
+              {
+                "trigger": "<message trigger>",
+                "response": "<bot response>"
+              }
+            ],
+            "required": [
+              "trigger",
+              "response"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "trigger": {
+                "$id": "#/properties/communicationable_messages/items/anyOf/0/properties/trigger",
+                "type": "string",
+                "title": "The trigger",
+                "description": "The string that triggers a response",
+                "default": "",
+                "examples": [
+                  "<message trigger>"
+                ]
+              },
+              "response": {
+                "$id": "#/properties/communicationable_messages/items/anyOf/0/properties/response",
+                "type": "string",
+                "title": "The response",
+                "description": "The response Ranka will respond to the trigger",
+                "default": "",
+                "examples": [
+                  "<bot response>"
+                ]
+              }
+            }
+          }
+        ],
+        "$id": "#/properties/communicationable_messages/items"
+      }
+    }
+  }
+}

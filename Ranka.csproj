@@ -1,0 +1,79 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Platforms>x64</Platforms>
+    <StartupObject>Ranka.Program</StartupObject>
+    <SignAssembly>false</SignAssembly>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>.</DockerfileContext>
+    <Version>0.4</Version>
+    <Description>Multi-purpose Discord bot for .NET</Description>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="2.2.0" />
+    <PackageReference Include="DotNetEnv" Version="1.4.0" />
+    <PackageReference Include="Figgle" Version="0.3.0" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.24" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.6" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.10.9" />
+    <PackageReference Include="NYoutubeDL" Version="0.11.0" />
+    <PackageReference Include="Pastel" Version="1.3.2" />
+    <PackageReference Include="PostSharp" Version="6.7.5-preview" />
+    <PackageReference Include="PuppeteerSharp" Version="2.0.3" />
+    <PackageReference Include="Sodium.Core" Version="1.2.3" />
+    <PackageReference Include="Steamazer" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update=".env">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="libopus.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="libopus.so">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="libsodium.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="opus.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="responses.642029944691490816.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="responses.template.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="responses.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="settings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="start.sh">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ProjectExtensions><VisualStudio><UserProperties responses_1template_1json__JsonSchema="" responses-schema_1json__JsonSchema="https://json-schema.org/draft-07/schema" /></VisualStudio></ProjectExtensions>
+
+</Project>

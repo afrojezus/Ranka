@@ -1,0 +1,9 @@
+﻿{
+  "$schema": "responses-schema.json",
+  "communicationable_messages": [
+    {
+      "trigger": "shut up",
+      "response": "ok... ill stop.. .·´¯`(>▂<)´¯`·. "
+    }
+  ]
+}

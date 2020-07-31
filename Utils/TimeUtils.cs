@@ -2,7 +2,7 @@
 
 namespace Ranka.Utils
 {
-    public class TimeUtils
+    public static class TimeUtils
     {
         /* Thank you ScottCher for this tip.
         * https://stackoverflow.com/questions/249760/how-can-i-convert-a-unix-timestamp-to-datetime-and-vice-versa/7596509

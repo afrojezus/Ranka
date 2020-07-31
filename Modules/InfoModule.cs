@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -54,11 +55,10 @@ namespace Ranka.Modules
                 footer.IconUrl = Context.Client.CurrentUser.GetAvatarUrl();
             });
 
-            await RankaReplyAsync(eb);
+            await RankaReplyAsync(eb).ConfigureAwait(false);
         }
 
         [Command("help")]
-        [Summary("This page duh!")]
         public async Task HelpAsync()
         {
             var modules = CommandService.Modules.Where(x => !string.IsNullOrWhiteSpace(x.Summary));
@@ -83,7 +83,7 @@ namespace Ranka.Modules
                 bool success = false;
                 foreach (var command in module.Commands)
                 {
-                    var result = await command.CheckPreconditionsAsync(Context, Provider);
+                    var result = await command.CheckPreconditionsAsync(Context, Provider).ConfigureAwait(false);
                     if (result.IsSuccess)
                     {
                         success = true;
@@ -94,23 +94,22 @@ namespace Ranka.Modules
                     continue;
 
                 eb.AddField(module.Name, module.Summary
-                    + $"\n```{string.Join(", ", module.Commands.Select(o => o.Name))}```");
+                    + $"\n```{string.Join(", ", new HashSet<string>(module.Commands.Select(o => o.Name)))}```");
             }
 
-            await RankaReplyAsync(eb);
+            await RankaReplyAsync(eb).ConfigureAwait(false);
             return;
         }
 
         [Command("help")]
-        [Summary("This page duh!")]
         public async Task HelpAsync([Remainder][Summary("The category")] string category)
         {
             var module = CommandService.Modules.FirstOrDefault(x => x.Name.ToLower() == category.ToLower());
 
             if (module == null)
             {
-                await RankaReplyAsync($"Mmmm... I can't find that category anywhere in me, sure you wrote it right? ←_←");
-                await HelpAsync();
+                await RankaReplyAsync($"Mmmm... I can't find that category anywhere in me, sure you wrote it right? ←_←").ConfigureAwait(false);
+                await HelpAsync().ConfigureAwait(false);
                 return;
             }
 
@@ -133,17 +132,17 @@ namespace Ranka.Modules
             var commands = module.Commands.Where(x => !string.IsNullOrWhiteSpace(x.Summary)).GroupBy(x => x.Name).Select(x => x.First());
             foreach (var command in commands)
             {
-                var result = await command.CheckPreconditionsAsync(Context, Provider);
+                var result = await command.CheckPreconditionsAsync(Context, Provider).ConfigureAwait(false);
                 if (result.IsSuccess)
                 {
                     var name = $"{Config["prefix"]}{command.Name}";
-                    var commandParameters = command.Parameters.Count > 0 ? $"\nUsage: `{string.Join(" ", command.Parameters.Select(o => $"{name} <{o.Name}>"))}`" +
+                    var commandParameters = command.Parameters.Count > 0 ? $"\nUsage`{name} {string.Join(" ", command.Parameters.Select(o => $"<{o.Name}>"))}`" +
                         $"\n{string.Join("\n", command.Parameters.Select(o => $"`<{o.Name}>`: {o.Summary}"))}" : null;
                     eb.AddField(name, command.Summary + commandParameters);
                 }
             }
 
-            await RankaReplyAsync(eb);
+            await RankaReplyAsync(eb).ConfigureAwait(false);
             return;
         }
     }

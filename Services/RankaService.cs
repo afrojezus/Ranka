@@ -5,11 +5,13 @@ using System;
 namespace Ranka.Services
 {
     // Based on https://github.com/domnguyen/Discord-Bot/blob/master/src/Services/CustomService.cs
-    public enum R_LogOutput { Console, Reply, Playing };
+    public enum LogOutput { Console, Reply, Playing };
 
     public class RankaService
     {
+#pragma warning disable CA1051
         protected RankaModule rankaModule = null;
+#pragma warning restore CA1051
 
         public void SetRankaModule(RankaModule r)
         {
@@ -20,33 +22,47 @@ namespace Ranka.Services
         {
             if (rankaModule == null) return;
 
-            await rankaModule.RankaFileUploadAsync(file);
+            await rankaModule.RankaFileUploadAsync(file).ConfigureAwait(false);
+        }
+
+        protected async void DiscordFileUpload(string file = null, EmbedBuilder embed = null)
+        {
+            if (rankaModule == null) return;
+
+            await rankaModule.RankaFileUploadAsync(file, embed).ConfigureAwait(false);
         }
 
         protected async void DiscordReply(string s = null, bool tts = false, EmbedBuilder emb = null)
         {
             if (rankaModule == null) return;
 
-            await rankaModule.RankaReplyAsync(s, tts, emb);
+            await rankaModule.RankaReplyAsync(s, tts, emb).ConfigureAwait(false);
+        }
+
+        protected async void DiscordReply(EmbedBuilder emb = null)
+        {
+            if (rankaModule == null) return;
+
+            await rankaModule.RankaReplyAsync(emb).ConfigureAwait(false);
         }
 
         protected async void DiscordActivity(string s, ActivityType a)
         {
             if (rankaModule == null) return;
-            await rankaModule.RankaActivityAsync(s, a);
+            await rankaModule.RankaActivityAsync(s, a).ConfigureAwait(false);
         }
 
-        protected void Log(string s, int output = (int)R_LogOutput.Console)
+        protected void Log(string s, int output = (int)LogOutput.Console)
         {
             string withDate = $"{DateTime.Now:hh:mm:ss} Ranka {s}";
 #if (DEBUG_VERBOSE)
             Console.WriteLine("[DEBUG] -- " + str);
 #endif
-            if (output == (int)R_LogOutput.Console)
+            if (output == (int)LogOutput.Console)
             {
                 Console.WriteLine("DEBUG -- " + withDate);
             }
-            if (output == (int)R_LogOutput.Reply)
+            if (output == (int)LogOutput.Reply)
             {
                 EmbedBuilder eb = new EmbedBuilder
                 {
@@ -56,7 +72,7 @@ namespace Ranka.Services
 
                 DiscordReply(null, false, eb);
             }
-            if (output == (int)R_LogOutput.Playing)
+            if (output == (int)LogOutput.Playing)
             {
                 DiscordActivity(s, ActivityType.Playing);
             }

@@ -21,4 +21,4 @@ fi
 
 echo 'Your dependencies are a-ok! Starting Ranka...'
 
-dotnet ./Ranka.dll
+./Ranka

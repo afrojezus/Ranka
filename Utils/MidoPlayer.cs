@@ -13,33 +13,12 @@ namespace Ranka.Utils
         // Private variables.
         private bool m_IsRunning = false;           // Boolean to wrap the audio playback method.
 
+        private MidoFile currentMidoFile = null;
         private Process m_Process = null;           // Process that runs when playing.
         private Stream m_Stream = null;             // Stream output when playing.
         private bool m_IsPlaying = false;           // Flag to change to play or pause the audio.
         private float m_Volume = 1.0f;              // Volume value that's checked during playback. Reference: PlayAudioAsync.
         private readonly int m_BLOCK_SIZE = 3840;            // Custom block size for playback, in bytes.
-
-        // Creates a local stream using the file path specified and ffmpeg to stream it directly.
-        // The format Discord takes is 16-bit 48000Hz PCM
-        private Process CreateLocalStream(string path)
-        {
-            try
-            {
-                return Process.Start(new ProcessStartInfo
-                {
-                    FileName = "ffmpeg",
-                    Arguments = $"-hide_banner -loglevel panic -i \"{path}\" -ac 2 -f s16le -ar 48000 pipe:1",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                });
-            }
-            catch
-            {
-                Console.WriteLine($"Error while opening local stream : {path}");
-                return null;
-            }
-        }
 
         // Creates a network stream using youtube-dl.exe, then piping it to ffmpeg to stream it directly.
         // The format Discord takes is 16-bit 48000Hz PCM
@@ -48,48 +27,51 @@ namespace Ranka.Utils
         {
             try
             {
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    Console.WriteLine("Executing youtube-dl and ffmpeg on Windows.");
-                    return Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "cmd",
-                        Arguments = $"/C youtube-dl -o - {path} | ffmpeg -hide_banner -loglevel panic -i pipe:0 -ac 2 -f s16le -ar 48000 pipe:1",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                {
-                    Console.WriteLine("Executing youtube-dl and ffmpeg on macOS.");
-                    return Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "zsh",
-                        Arguments = $"-c \"youtube-dl -o - {path} | ffmpeg -hide_banner -loglevel panic -i pipe:0 -ac 2 -f s16le -ar 48000 pipe:1\"",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                }
-                else
-                {
-                    Console.WriteLine("Executing youtube-dl and ffmpeg on Linux.");
-                    return Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "bash",
-                        Arguments = $"-c \"youtube-dl -o - {path} | ffmpeg -hide_banner -loglevel panic -i pipe:0 -ac 2 -f s16le -ar 48000 pipe:1\"",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true
-                    });
-                }
+                if (path.Contains("www.youtube.com"))
+                    return YoutubeStream(path);
+
+                return DirectStream(path);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Console.WriteLine($"Error while opening network stream : {path}");
-                throw e;
+                Console.WriteLine($"Error while opening network stream: {path}");
+                throw;
             }
+        }
+
+        private Process DirectStream(string path)
+        {
+            string processName = "ffmpeg";
+            string processArguments = $"-hide_banner -loglevel panic -i {path} -ac 2 -f s16le -ar 48000 pipe:1";
+
+            Console.WriteLine($"Executing ffmpeg");
+
+            return Process.Start(new ProcessStartInfo
+            {
+                FileName = processName,
+                Arguments = processArguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
+        }
+
+        private Process YoutubeStream(string path)
+        {
+            string processName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd" : "bash";
+            string processArguments = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"/C youtube-dl -o - {path} | ffmpeg -hide_banner -loglevel panic -i pipe:0 -ac 2 -f s16le -ar 48000 pipe:1"
+                : $"-c \"youtube-dl -o - {path} | ffmpeg -hide_banner -loglevel panic -i pipe:0 -ac 2 -f s16le -ar 48000 pipe:1\"";
+
+            Console.WriteLine($"Executing youtube-dl and ffmpeg on {processName}");
+
+            return Process.Start(new ProcessStartInfo
+            {
+                FileName = processName,
+                Arguments = processArguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
         }
 
         // Async function that handles the playback of the audio. This function is technically blocking in it's for loop.
@@ -102,12 +84,12 @@ namespace Ranka.Utils
             // Set running to true.
             m_IsRunning = true;
 
-            // Start a new process and create an output stream. Decide between network or local.
-            m_Process = (bool)song.IsNetwork ? CreateNetworkStream(song.FileName) : CreateLocalStream(song.FileName);
+            // Start a new process and create an output stream.
+            m_Process = CreateNetworkStream(song.FileName);
             m_Stream = client.CreatePCMStream(AudioApplication.Music); // Consider setting custom bitrate, buffers, and packet loss props.
             m_IsPlaying = true; // Set this to true to start the loop properly.
 
-            await Task.Delay(5000); // We should wait for ffmpeg to buffer some of the audio first.
+            await Task.Delay(2000).ConfigureAwait(false); // We should wait for ffmpeg to buffer some of the audio first.
 
             // We stream the audio in chunks.
             while (true)
@@ -125,7 +107,7 @@ namespace Ranka.Utils
                 int blockSize = m_BLOCK_SIZE; // Size of bytes to read per frame.
                 byte[] buffer = new byte[blockSize];
                 int byteCount;
-                byteCount = await m_Process.StandardOutput.BaseStream.ReadAsync(buffer, 0, blockSize);
+                byteCount = await m_Process.StandardOutput.BaseStream.ReadAsync(buffer, 0, blockSize).ConfigureAwait(false);
 
                 // If the stream cannot be read or we reach the end of the file, we exit.
                 if (byteCount <= 0) break;
@@ -133,12 +115,12 @@ namespace Ranka.Utils
                 try
                 {
                     // Write out to the stream. Relies on m_Volume to adjust bytes accordingly.
-                    await m_Stream.WriteAsync(ScaleVolumeSafeAllocateBuffers(buffer, m_Volume), 0, byteCount);
+                    await m_Stream.WriteAsync(ScaleVolumeSafeAllocateBuffers(buffer, m_Volume), 0, byteCount).ConfigureAwait(false);
                 }
                 catch (Exception exception)
                 {
                     Console.WriteLine(exception);
-                    break;
+                    throw;
                 }
             }
 
@@ -191,8 +173,15 @@ namespace Ranka.Utils
             catch (Exception exception)
             {
                 Console.WriteLine(exception);
-                return null;
+                throw;
             }
+        }
+
+        public MidoFile GetCurrentMidoFile()
+        {
+            if (currentMidoFile != null || m_IsPlaying)
+                return currentMidoFile;
+            return null;
         }
 
         // Adjusts the current volume to the value passed. This affects the current AudioPlaybackAsync.
@@ -219,10 +208,12 @@ namespace Ranka.Utils
         {
             // Stop the current song. We wait until it's done to play the next song.
             if (m_IsRunning) Stop();
-            while (m_IsRunning) await Task.Delay(1000);
+            while (m_IsRunning) await Task.Delay(1000).ConfigureAwait(false);
+
+            currentMidoFile = song;
 
             // Start playback.
-            await AudioPlaybackAsync(client, song);
+            await AudioPlaybackAsync(client, currentMidoFile).ConfigureAwait(false);
         }
 
         // Pauses the stream if it's playing. This affects the current AudioPlaybackAsync.

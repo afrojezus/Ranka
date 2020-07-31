@@ -2,10 +2,9 @@
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace Ranka.API
 {
@@ -15,43 +14,25 @@ namespace Ranka.API
     public class Instafetcher
     {
         private readonly string _query;
-        private Browser _browser;
-        private Page _page;
+
+        private readonly string rootdir = AppDomain.CurrentDomain.BaseDirectory + "/screenshots";
 
         public Instafetcher(string query)
         {
             _query = query;
         }
 
-        public async Task Prepare()
+        public async Task<List<InstafetcherObject>> GetSearchResults(Page page)
         {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            _browser = await Puppeteer.LaunchAsync(new LaunchOptions
-            {
-                Headless = true
-            });
-            _page = await _browser.NewPageAsync();
-            await _page.GoToAsync("https://www.instagram.com/");
-            await _page.WaitForSelectorAsync("#react-root > section > main > article > div.rgFsT > div:nth-child(1) > div > form > div:nth-child(2) > div > label > input");
-            await _page.FocusAsync("#react-root > section > main > article > div.rgFsT > div:nth-child(1) > div > form > div:nth-child(2) > div > label > input");
-            await _page.Keyboard.TypeAsync(Environment.GetEnvironmentVariable("INSTAGRAM_USERNAME"));
-            await _page.WaitForSelectorAsync("#react-root > section > main > article > div.rgFsT > div:nth-child(1) > div > form > div:nth-child(3) > div > label > input");
-            await _page.FocusAsync("#react-root > section > main > article > div.rgFsT > div:nth-child(1) > div > form > div:nth-child(3) > div > label > input");
-            await _page.Keyboard.TypeAsync(Environment.GetEnvironmentVariable("INSTAGRAM_PASSWORD"));
-            await _page.ClickAsync("#react-root > section > main > article > div.rgFsT > div:nth-child(1) > div > form > div:nth-child(4) > button");
-            await _page.WaitForNavigationAsync();
-            await _page.WaitForSelectorAsync(".XTCLo");
-            await _page.FocusAsync(".XTCLo");
-            await _page.Keyboard.TypeAsync(_query);
-            await _page.WaitForSelectorAsync(".fuqBx");
-            await _page.FocusAsync(".fuqBx");
-        }
-
-        public async Task<List<InstafetcherObject>> GetSearchResults()
-        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            await page.WaitForSelectorAsync(".XTCLo").ConfigureAwait(false);
+            await page.FocusAsync(".XTCLo").ConfigureAwait(false);
+            await page.Keyboard.TypeAsync(_query).ConfigureAwait(false);
+            await page.WaitForSelectorAsync(".fuqBx").ConfigureAwait(false);
+            await page.FocusAsync(".fuqBx").ConfigureAwait(false);
             try
             {
-                var content = await _page.GetContentAsync();
+                var content = await page.GetContentAsync().ConfigureAwait(false);
 
                 HtmlDocument doc = new HtmlDocument();
                 doc.LoadHtml(content);
@@ -72,24 +53,55 @@ namespace Ranka.API
                     obj.Url = item.Attributes["href"].Value;
                     output.Add(obj);
                 }
-
-                await _page.CloseAsync();
-                await _browser.CloseAsync();
-
-                _page = null;
-                _browser = null;
-
+                Console.WriteLine("Results fetched");
                 return output;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                await _page.CloseAsync();
-                await _browser.CloseAsync();
-
-                _page = null;
-                _browser = null;
-                throw e;
+                throw;
             }
+        }
+
+        public async Task<string> GetScreenshot(List<InstafetcherObject> list, int index, Page page)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            var _ = list.ToArray<InstafetcherObject>();
+
+            var selected = _[index];
+
+            await page.GoToAsync($"https://www.instagram.com{selected.Url}").ConfigureAwait(false);
+            await page.WaitForTimeoutAsync(500).ConfigureAwait(false);
+
+            if (!Directory.Exists(rootdir)) Directory.CreateDirectory(rootdir);
+
+            await page.ScreenshotAsync($"{rootdir}/tmp_screenshot.png").ConfigureAwait(false);
+            Console.WriteLine("Screenshot grabbed!");
+            return $"{rootdir}/tmp_screenshot.png";
+        }
+
+        public async Task<string> GetScreenshot(List<InstafetcherObject> list, int index, Page page, int timeout)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            var _ = list.ToArray<InstafetcherObject>();
+
+            var selected = _[index];
+
+            await page.GoToAsync($"https://www.instagram.com{selected.Url}").ConfigureAwait(false);
+            await page.WaitForTimeoutAsync(timeout).ConfigureAwait(false);
+
+            if (!Directory.Exists(rootdir)) Directory.CreateDirectory(rootdir);
+
+            await page.ScreenshotAsync($"{rootdir}/tmp_screenshot.png").ConfigureAwait(false);
+            Console.WriteLine("Screenshot grabbed!");
+            return $"{rootdir}/tmp_screenshot.png";
+        }
+
+        public async Task Cleanup(Page page)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            await page.CloseAsync().ConfigureAwait(false);
+            if (File.Exists($"{rootdir}/tmp_screenshot.png")) File.Delete($"{rootdir}/tmp_screenshot.png");
+            Console.WriteLine("Temporary files wiped. Page destroyed.");
         }
     }
 

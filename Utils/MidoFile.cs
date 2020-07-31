@@ -5,15 +5,16 @@
     {
         private string m_FileName;
         private string m_Title;
-        private bool m_IsNetwork;
-        private bool m_IsDownloaded;
+
+        private string m_Thumbnail;
+        private string m_Description;
 
         public MidoFile()
         {
             m_FileName = "";
             m_Title = "";
-            m_IsNetwork = true;
-            m_IsDownloaded = false;
+            m_Thumbnail = "";
+            m_Description = "";
         }
 
         public override string ToString()
@@ -33,16 +34,16 @@
             set { m_Title = value; }
         }
 
-        public bool IsNetwork
+        public string Thumbnail
         {
-            get { return m_IsNetwork; }
-            set { m_IsNetwork = value; }
+            get { return m_Thumbnail; }
+            set { m_Thumbnail = value; }
         }
 
-        public bool IsDownloaded
+        public string Description
         {
-            get { return m_IsDownloaded; }
-            set { m_IsDownloaded = value; }
+            get { return m_Description; }
+            set { m_Description = value; }
         }
     }
 }

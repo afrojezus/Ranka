@@ -11,7 +11,10 @@ using System.Threading.Tasks;
 namespace Ranka.Services
 {
     // Based on https://github.com/domnguyen/Discord-Bot/blob/master/src/Services/AudioService.cs
+#pragma warning disable CA1001
+
     public class MidoService : RankaService
+#pragma warning restore CA1001
     {
         // Concurrent dictionary for multithreaded environments.
         private readonly ConcurrentDictionary<ulong, IAudioClient> m_ConnectedChannels = new ConcurrentDictionary<ulong, IAudioClient>();
@@ -19,8 +22,8 @@ namespace Ranka.Services
         // Playlist.
         private readonly ConcurrentQueue<MidoFile> m_Playlist = new ConcurrentQueue<MidoFile>();
 
-        // Downloader.
-        private readonly MidoDownloader m_AudioDownloader = new MidoDownloader(); // Only downloaded on playlist add.
+        // Controller.
+        private readonly MidoController m_AudioDownloader = new MidoController(); // Only downloaded on playlist add.
 
         // Player.
         private readonly MidoPlayer m_AudioPlayer = new MidoPlayer();
@@ -43,7 +46,7 @@ namespace Ranka.Services
         {
             m_DelayAction = true; // Lock.
             f();
-            await Task.Delay(m_DelayActionLength); // Delay to prevent error condition. TEMPORARY.
+            await Task.Delay(m_DelayActionLength).ConfigureAwait(false); // Delay to prevent error condition. TEMPORARY.
             m_DelayAction = false; // Unlock.
         }
 
@@ -84,7 +87,7 @@ namespace Ranka.Services
             }
 
             // Attempt to connect to this audio channel.
-            var audioClient = await target.ConnectAsync();
+            var audioClient = await target.ConnectAsync().ConfigureAwait(false);
 
             try // We should put a try block in case audioClient is null or some other error occurs.
             {
@@ -100,9 +103,10 @@ namespace Ranka.Services
                     return;
                 }
             }
-            catch
+            catch (Exception)
             {
                 Log("The client failed to connect to the target voice channel.");
+                throw;
             }
 
             // If we can't add it to the dictionary or connecting didn't work properly, error.
@@ -118,13 +122,14 @@ namespace Ranka.Services
 
             // To avoid any issues, we stop the player before leaving the channel.
             if (m_AudioPlayer.IsRunning()) StopAudio();
-            while (m_AudioPlayer.IsRunning()) await Task.Delay(1000); // Wait until it's fully stopped.
+            while (m_AudioPlayer.IsRunning()) await Task.Delay(1000).ConfigureAwait(false); // Wait until it's fully stopped.
 
             // Attempt to remove from the current dictionary, and if removed, stop it.
             if (m_ConnectedChannels.TryRemove(guild.Id, out var audioClient))
             {
                 Log("The client is now disconnected from the current voice channel.");
-                await DelayAction(() => audioClient.StopAsync()); // Wait until the audioClient is properly disconnected.
+                await DelayAction(() => audioClient.StopAsync()).ConfigureAwait(false); // Wait until the audioClient is properly disconnected.
+                audioClient.Dispose();
                 return;
             }
 
@@ -139,16 +144,43 @@ namespace Ranka.Services
             if (!(state is IVoiceChannel channel)) return;
 
             // Check user count.
-            int count = (await channel.GetUsersAsync().FlattenAsync()).Count();
+            int count = (await channel.GetUsersAsync().FlattenAsync().ConfigureAwait(false)).Count();
             if (count < 2)
             {
-                await LeaveAudioAsync(channel.Guild);
+                await LeaveAudioAsync(channel.Guild).ConfigureAwait(false);
                 if (m_VoiceChannelTimer != null)
                 {
                     m_VoiceChannelTimer.Dispose();
                     m_VoiceChannelTimer = null;
                 }
             }
+        }
+
+        public void FetchMidoData()
+        {
+            MidoFile midoFile = m_AudioPlayer.GetCurrentMidoFile();
+
+            if (midoFile == null)
+                throw new Exception("Currently not playing anything!");
+
+            EmbedBuilder eb = new EmbedBuilder
+            {
+                Author = new EmbedAuthorBuilder
+                {
+                    Name = "Now playing",
+                    IconUrl = "https://i.imgur.com/GYpajrA.png",
+                },
+                Title = midoFile.Title,
+                Description = midoFile.Description,
+                ThumbnailUrl = midoFile.Thumbnail,
+                Color = Color.Red,
+                Footer = new EmbedFooterBuilder
+                {
+                    Text = "Mido for Ranka"
+                },
+            };
+
+            DiscordReply(eb);
         }
 
         // Returns the number of async calls to ForcePlayAudioSync.
@@ -162,7 +194,7 @@ namespace Ranka.Services
             if (guild == null) return;
 
             // Get audio info.
-            MidoFile song = await GetAudioFileAsync(path);
+            MidoFile song = await GetAudioFileAsync(path).ConfigureAwait(false);
 
             // Can't play an empty song.
             if (song == null) throw new Exception("I can't play it! ╯︿╰");
@@ -171,21 +203,24 @@ namespace Ranka.Services
             Interlocked.Increment(ref m_NumPlaysCalled);
 
             // To avoid any issues, we stop any other audio running. The audioplayer will also stop the current song...
-            if (m_AudioPlayer.IsRunning()) StopAudio();
-            while (m_AudioPlayer.IsRunning()) await Task.Delay(1000);
+            if (m_AudioPlayer.IsRunning())
+            {
+                StopAudio();
+            }
+            while (m_AudioPlayer.IsRunning()) await Task.Delay(1000).ConfigureAwait(false);
 
             // Start the stream, this is the main part of 'play'
             if (m_ConnectedChannels.TryGetValue(guild.Id, out var audioClient))
             {
-                Log($"Oke! I'll play {song.Title} now", (int)R_LogOutput.Reply); // Reply in the text channel.
-                Log(song.Title, (int)R_LogOutput.Playing); // Set playing.
-                await m_AudioPlayer.Play(audioClient, song); // The song should already be identified as local or network.
-                Log("nothing /_ \\", (int)R_LogOutput.Playing);
+                Log($"Oke! I'll play {song.Title} now", (int)LogOutput.Reply); // Reply in the text channel.
+                Log(song.Title, (int)LogOutput.Playing); // Set playing.
+                await m_AudioPlayer.Play(audioClient, song).ConfigureAwait(false); // The song should already be identified as local or network.
+                Log("nothing /_ \\", (int)LogOutput.Playing);
             }
             else
             {
                 // If we can't get it from the dictionary, we're probably not connected to it yet.
-                Log("Unable to play in the proper channel. Make sure the Mido client is connected.");
+                Log("Unable to play in the proper channel. Make sure the Mido client is connected.", 1);
             }
 
             // Uncount this play.
@@ -204,7 +239,7 @@ namespace Ranka.Services
             while (m_AutoPlayRunning = m_AutoPlay)
             {
                 // If the audio player is already playing, we need to wait until it's fully finished.
-                if (m_AudioPlayer.IsRunning()) await Task.Delay(1000);
+                if (m_AudioPlayer.IsRunning()) await Task.Delay(1000).ConfigureAwait(false);
 
                 // We do some checks before entering this loop.
                 if (m_Playlist.IsEmpty || !m_AutoPlayRunning || !m_AutoPlay) break;
@@ -215,10 +250,10 @@ namespace Ranka.Services
                     MidoFile song = PlaylistNext(); // If null, nothing in the playlist. We can wait in this loop until there is.
                     if (song != null)
                     {
-                        Log($"Now playing: {song.Title}", (int)R_LogOutput.Reply); // Reply in the text channel.
-                        Log(song.Title, (int)R_LogOutput.Playing); // Set playing.
-                        await m_AudioPlayer.Play(audioClient, song); // The song should already be identified as local or network.
-                        Log("nothing /_ \\", (int)R_LogOutput.Playing);
+                        Log($"Now playing: {song.Title}", (int)LogOutput.Reply); // Reply in the text channel.
+                        Log(song.Title, (int)LogOutput.Playing); // Set playing.
+                        await m_AudioPlayer.Play(audioClient, song).ConfigureAwait(false); // The song should already be identified as local or network.
+                        Log("nothing /_ \\", (int)LogOutput.Playing);
                     }
                     else
                         Log($"What is {song} ??? ~(>_<。)＼");
@@ -271,7 +306,7 @@ namespace Ranka.Services
         public async Task CheckAutoPlayAsync(IGuild guild, IMessageChannel channel)
         {
             if (m_AutoPlay && !m_AutoPlayRunning && !m_AudioPlayer.IsRunning()) // if autoplay or force play isn't playing.
-                await AutoPlayAudioAsync(guild, channel);
+                await AutoPlayAudioAsync(guild, channel).ConfigureAwait(false);
         }
 
         // Prints the playlist information.
@@ -281,7 +316,7 @@ namespace Ranka.Services
             int count = m_Playlist.Count;
             if (count == 0)
             {
-                Log("There are currently no items in the playlist.", (int)R_LogOutput.Reply);
+                Log("There are currently no items in the playlist.", (int)LogOutput.Reply);
                 return;
             }
 
@@ -291,7 +326,16 @@ namespace Ranka.Services
             // Create an embed builder.
             var emb = new EmbedBuilder();
 
-            emb.WithTitle("Current Playlist");
+            emb.WithAuthor(author =>
+            {
+                author.Name = "Current Playlist";
+                author.IconUrl = "https://i.imgur.com/GYpajrA.png";
+            });
+
+            // Get currently playing file
+            MidoFile midoFile = m_AudioPlayer.GetCurrentMidoFile();
+
+            emb.WithTitle($"{midoFile.Title}");
 
             for (int i = 0; i < count; i++)
             {
@@ -315,26 +359,25 @@ namespace Ranka.Services
                 footer.IconUrl = rankaModule.Context.Client.CurrentUser.GetAvatarUrl();
             });
 
-            emb.WithColor(Color.Green);
+            emb.WithColor(Color.Red);
 
-            DiscordReply("Playlist", false, emb);
+            DiscordReply(emb);
         }
 
         // Adds a song to the playlist.
         public async Task PlaylistAddAsync(string path)
         {
             // Get audio info.
-            MidoFile audio = await GetAudioFileAsync(path);
+            MidoFile audio = await GetAudioFileAsync(path).ConfigureAwait(false);
             if (audio != null)
             {
                 m_Playlist.Enqueue(audio); // Only add if there's no errors.
-                Log($"Added to playlist : {audio.Title}", (int)R_LogOutput.Reply);
+                Log($"Added to playlist: {audio.Title}", (int)LogOutput.Reply);
 
                 // If the downloader is set to true, we start the autodownload helper.
                 if (m_AutoDownload)
                 {
-                    if (audio.IsNetwork) m_AudioDownloader.Push(audio); // Auto download while in playlist.
-                    await m_AudioDownloader.StartDownloadAsync(); // Start the downloader if it's off.
+                    m_AudioDownloader.Push(audio); // Auto download while in playlist.
                 }
             }
         }
@@ -373,22 +416,12 @@ namespace Ranka.Services
         {
             try // We put this in a try catch block.
             {
-                MidoFile song = await m_AudioDownloader.GetAudioFileInfo(path);
-                if (song != null) // We check for a local available version.
-                {
-                    string filename = m_AudioDownloader.GetItem(song.Title);
-                    if (filename != null) // We found a local version.
-                    {
-                        song.FileName = filename;
-                        song.IsNetwork = false; // Network is now false.
-                        song.IsDownloaded = true;
-                    }
-                }
+                MidoFile song = await m_AudioDownloader.GetAudioFileInfo(path).ConfigureAwait(false);
                 return song;
             }
             catch
             {
-                return null;
+                throw new Exception("Failed to get song");
             }
         }
 
@@ -400,7 +433,7 @@ namespace Ranka.Services
             int itemCount = items.Length;
             if (itemCount == 0)
             {
-                Log("No local files found.", (int)R_LogOutput.Reply);
+                Log("No local files found.", (int)LogOutput.Reply);
                 return;
             }
 
@@ -412,7 +445,7 @@ namespace Ranka.Services
             int pages = (itemCount / pageSize) + 1;
             if (page < 1 || page > pages)
             {
-                Log($"There are {pages} pages. Select page 1 to {pages}.", (int)R_LogOutput.Reply);
+                Log($"There are {pages} pages. Select page 1 to {pages}.", (int)LogOutput.Reply);
                 return;
             }
 
@@ -451,31 +484,6 @@ namespace Ranka.Services
 
                 DiscordReply($"Page {p + 1}", false, emb);
             }
-        }
-
-        // Returns the name with the specified song by index.
-        // Returns null if a local song doesn't exist.
-        public string GetLocalSong(int index) { return m_AudioDownloader.GetItem(index); }
-
-        // Adds a song to the download queue.
-        public async Task DownloadSongAsync(string path)
-        {
-            MidoFile audio = await GetAudioFileAsync(path);
-            if (audio != null)
-            {
-                Log($"Added to the download queue : {audio.Title}", (int)R_LogOutput.Reply);
-
-                // If the downloader is set to true, we start the autodownload helper.
-                if (audio.IsNetwork) m_AudioDownloader.Push(audio); // Auto download while in playlist.
-                await m_AudioDownloader.StartDownloadAsync(); // Start the downloader if it's off.
-            }
-        }
-
-        // Removes any duplicates in our download folder.
-        public async Task RemoveDuplicateSongsAsync()
-        {
-            m_AudioDownloader.RemoveDuplicateItems();
-            await Task.Delay(0);
         }
     }
 }

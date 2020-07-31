@@ -8,41 +8,67 @@
     <SignAssembly>false</SignAssembly>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerfileContext>.</DockerfileContext>
-    <Version>0.4</Version>
+    <Version>0.5</Version>
     <Description>Multi-purpose Discord bot for .NET</Description>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <Prefer32Bit>true</Prefer32Bit>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <Prefer32Bit>true</Prefer32Bit>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
 
 
   <ItemGroup>
+    <PackageReference Include="BooruSharp" Version="2.7.0" />
     <PackageReference Include="Discord.Net" Version="2.2.0" />
     <PackageReference Include="DotNetEnv" Version="1.4.0" />
     <PackageReference Include="Figgle" Version="0.3.0" />
+    <PackageReference Include="GoogleTranslateFreeApi" Version="1.1.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.24" />
+    <PackageReference Include="ksemenenko.ColorThief" Version="1.1.1.4" />
+    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.6">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.6" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="3.1.6" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="3.1.6" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.6" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.10.9" />
-    <PackageReference Include="NYoutubeDL" Version="0.11.0" />
+    <PackageReference Include="Miki.Anilist" Version="0.6.3" />
+    <PackageReference Include="Octokit" Version="0.48.0" />
     <PackageReference Include="Pastel" Version="1.3.2" />
     <PackageReference Include="PostSharp" Version="6.7.5-preview" />
     <PackageReference Include="PuppeteerSharp" Version="2.0.3" />
     <PackageReference Include="Sodium.Core" Version="1.2.3" />
     <PackageReference Include="Steamazer" Version="1.0.1" />
+    <PackageReference Include="System.Drawing.Common" Version="4.7.0" />
+    <PackageReference Include="TenorSharp" Version="1.4.1" />
+    <PackageReference Include="WikipediaNET" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update=".env">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="assets\MidoIcon.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Update="assets\ranka_angry.JPEG">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="assets\ranka_deadinside.JPEG">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="assets\ranka_really.JPEG">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="assets\ranka_really2.JPEG">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="libopus.dll">

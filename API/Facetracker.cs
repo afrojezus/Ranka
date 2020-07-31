@@ -2,8 +2,8 @@
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Ranka.API
@@ -11,43 +11,23 @@ namespace Ranka.API
     public class Facetracker
     {
         private readonly string _query;
-        private Browser _browser;
-        private Page _page;
+
+        private readonly string rootdir = AppDomain.CurrentDomain.BaseDirectory + "/screenshots";
 
         public Facetracker(string query)
         {
             _query = query;
         }
 
-        public async Task Prepare()
+        public async Task<List<FacetrackerObject>> GetSearchResults(Page page)
         {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            _browser = await Puppeteer.LaunchAsync(new LaunchOptions
-            {
-                Headless = true,
-            });
-            await _browser.DefaultContext.OverridePermissionsAsync("https://www.facebook.com", new List<OverridePermission> { OverridePermission.Geolocation, OverridePermission.Notifications });
-            _page = await _browser.NewPageAsync();
-            await _page.GoToAsync("https://www.facebook.com/");
-            await _page.WaitForSelectorAsync("#email");
-            await _page.FocusAsync("#email");
-            await _page.Keyboard.TypeAsync(Environment.GetEnvironmentVariable("FACEBOOK_USERNAME"));
-            await _page.WaitForSelectorAsync("#pass");
-            await _page.FocusAsync("#pass");
-            await _page.Keyboard.TypeAsync(Environment.GetEnvironmentVariable("FACEBOOK_PASSWORD"));
-            await _page.WaitForSelectorAsync("#loginbutton");
-            await _page.ClickAsync("#loginbutton");
-            await _page.WaitForNavigationAsync();
-            await _page.WaitForTimeoutAsync(2000);
-            await _page.GoToAsync($"https://www.facebook.com/search/people/?q={_query}&epa=SERP_TAB");
-            await _page.WaitForTimeoutAsync(2000);
-        }
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
 
-        public async Task<List<FacetrackerObject>> GetSearchResults()
-        {
+            await page.GoToAsync($"https://www.facebook.com/search/people/?q={_query}&epa=SERP_TAB").ConfigureAwait(false);
+            await page.WaitForTimeoutAsync(1500).ConfigureAwait(false);
             try
             {
-                var content = await _page.GetContentAsync();
+                var content = await page.GetContentAsync().ConfigureAwait(false);
 
                 HtmlDocument doc = new HtmlDocument();
                 doc.LoadHtml(content);
@@ -70,7 +50,6 @@ namespace Ranka.API
                     int index = imgUrl.IndexOf("?");
                     if (index > 0)
                         imgUrl = imgUrl.Substring(0, index);
-                    Console.WriteLine(imgUrl);
                     FacetrackerObject obj = new FacetrackerObject
                     {
                         Url = a.Attributes["href"].Value,
@@ -79,24 +58,38 @@ namespace Ranka.API
                     };
                     output.Add(obj);
                 }
-
-                await _page.CloseAsync();
-                await _browser.CloseAsync();
-
-                _page = null;
-                _browser = null;
-
+                Console.WriteLine("Results fetched");
                 return output;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                await _page.CloseAsync();
-                await _browser.CloseAsync();
-
-                _page = null;
-                _browser = null;
-                throw e;
+                throw;
             }
+        }
+
+        public async Task<string> GetScreenshot(List<FacetrackerObject> list, int index, Page page)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            var _ = list.ToArray<FacetrackerObject>();
+
+            var selected = _[index];
+
+            await page.GoToAsync($"{selected.Url}").ConfigureAwait(false);
+
+            if (!Directory.Exists(rootdir)) Directory.CreateDirectory(rootdir);
+
+            await page.ScreenshotAsync($"{rootdir}/tmp_screenshot.png").ConfigureAwait(false);
+            Console.WriteLine("Screenshot grabbed!");
+
+            return $"{rootdir}/tmp_screenshot.png";
+        }
+
+        public async Task Cleanup(Page page)
+        {
+            if (page == null) throw new ArgumentNullException(nameof(page), "No chromium instance passed");
+            await page.CloseAsync().ConfigureAwait(false);
+            if (File.Exists($"{rootdir}/tmp_screenshot.png")) File.Delete($"{rootdir}/tmp_screenshot.png");
+            Console.WriteLine("Temporary files wiped. Page destroyed.");
         }
     }
 

@@ -3,13 +3,21 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Ranka.Utils
 {
     // Based on https://github.com/domnguyen/Discord-Bot/blob/master/src/Helpers/AudioDownloader.cs
-    public class MidoDownloader
+    public class MidoController
     {
+        private enum SourceType
+        {
+            YouTube,
+            Spotify,
+            Soundcloud
+        }
+
         // Concurrent Library to keep track of the current downloads order.
         private readonly ConcurrentQueue<MidoFile> m_DownloadQueue = new ConcurrentQueue<MidoFile>();
 
@@ -17,8 +25,7 @@ namespace Ranka.Utils
         private readonly string m_DownloadPath = AppDomain.CurrentDomain.BaseDirectory + "/mido_tmp";              // Default folder path. This is relative to the running directory of the bot.
 
         private bool m_IsRunning = false;                   // Flag to check if it's in the middle of downloading already.
-        private string m_CurrentlyDownloading = "";         // Currently downloading file.
-        private readonly bool m_AllowDuplicates = true;              // Flag for downloading duplicate items.
+        private readonly string m_CurrentlyDownloading = "";         // Currently downloading file.
 
         // Returns the current downloading folder.
         public string GetDownloadPath() { return m_DownloadPath; }
@@ -48,14 +55,14 @@ namespace Ranka.Utils
                 if (File.Exists($"{m_DownloadPath}\\{item}") && !m_CurrentlyDownloading.Equals(item))
                     return $"{m_DownloadPath}\\{item}";
             }
-            catch { }
+            catch (Exception) { throw; }
             // Check by filename without .mp3.
             try
             {
                 if (File.Exists($"{m_DownloadPath}\\{item}.mp3") && !m_CurrentlyDownloading.Equals(item))
                     return $"{m_DownloadPath}\\{item}.mp3";
             }
-            catch { }
+            catch (Exception) { throw; }
 
             // Else we return blank. This means the item doesn't exist in our library.
             return null;
@@ -108,7 +115,7 @@ namespace Ranka.Utils
                 duplicates.TryAdd(filename, ++count);
 
                 try { if (count >= 2) File.Delete(item); }
-                catch { Console.WriteLine("Problem while deleting duplicates."); }
+                catch (Exception) { Console.WriteLine("Problem while deleting duplicates."); throw; }
             }
         }
 
@@ -122,80 +129,6 @@ namespace Ranka.Utils
         // Adds a song to the queue for download.
         public void Push(MidoFile song) { m_DownloadQueue.Enqueue(song); } // Only add if there's no errors.
 
-        // Starts the download loop and downloads from the front of the queue.
-        public async Task StartDownloadAsync()
-        {
-            if (m_IsRunning) return; // Download is already running, stop to avoid conflicts/race conditions.
-
-            // Loop for downloading.
-            m_IsRunning = true;
-            while (m_DownloadQueue.Count > 0)
-            {
-                if (!m_IsRunning) return; // Stop downloading.
-                await DownloadAsync(Pop());
-            }
-            m_IsRunning = false;
-        }
-
-        // Downloads the file in the background and sets downloaded to true when done.
-        // This can be used to optimize network audio sources.
-        private async Task DownloadAsync(MidoFile song)
-        {
-            // First we check if it's a network file that needs to be downloaded.
-            if (!song.IsNetwork) return;
-
-            // Then we check if the file already exists.
-            string filename = GetItem(song.Title + ".mp3");
-            if (filename != null) // We get the full path.
-            {
-                if (m_AllowDuplicates) filename = GetDuplicateItem(song.Title);
-                else return;
-            }
-            else // This is our first time seeing it.
-            {
-                filename = m_DownloadPath + "\\" + song.Title + ".mp3";
-            }
-
-            { // Start downloading.
-                // Set it as our currently downloading item.
-                m_CurrentlyDownloading = filename;
-                Console.WriteLine("Currently downloading : " + song.Title);
-
-                // youtube-dl.exe
-                Process youtubedl;
-
-                try
-                {
-                    // Download Video. This replaces the format with the extension .mp3 in the end.
-                    ProcessStartInfo youtubedlFile = new ProcessStartInfo()
-                    {
-                        FileName = "youtube-dl",
-                        Arguments = $"-x --audio-format mp3 -o \"{filename.Replace(".mp3", ".%(ext)s")}\" {song.FileName}",
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        UseShellExecute = false
-                    };
-                    youtubedl = Process.Start(youtubedlFile);
-                    youtubedl.WaitForExit();
-                }
-                catch
-                {
-                    // Error while downloading. Remove from folder if exists.
-                    Console.WriteLine("Error while downloading " + song.Title);
-                    if (GetItem(filename) != null) File.Delete(filename);
-                }
-
-                // Update the filename with the local directory, set it to local and downloaded to true.
-                // Remember, the title is already set.
-                song.FileName = filename;
-                song.IsNetwork = false; // Network is now false.
-                song.IsDownloaded = true;
-                m_CurrentlyDownloading = ""; // Reset our currently downloading item.
-            }
-
-            await Task.Delay(0);
-        }
-
         // Stops the download loop.
         public void StopDownload()
         {
@@ -204,7 +137,7 @@ namespace Ranka.Utils
 
         // Verifies that the path is a network path and not a local path. Checks here before extracting.
         // TODO: Add more arguments here, but we'll just check based on http and assume a network link.
-        public bool? VerifyNetworkPath(string path)
+        public static bool? VerifyNetworkPath(string path)
         {
             if (path == null) return null;
             return path.StartsWith("http");
@@ -242,7 +175,7 @@ namespace Ranka.Utils
                     ProcessStartInfo youtubedlMetaData = new ProcessStartInfo()
                     {
                         FileName = "youtube-dl",
-                        Arguments = $" -s -e --get-id \"ytsearch:{path}\"",
+                        Arguments = $" -s -e --get-id --get-description --get-thumbnail \"ytsearch:{path}\"",
                         CreateNoWindow = true,
                         RedirectStandardOutput = true,
                         UseShellExecute = false
@@ -256,9 +189,9 @@ namespace Ranka.Utils
                     {
                         StreamData.Title = output[0];
                         StreamData.FileName = youtubePath + output[1];
+                        StreamData.Description = output[3];
+                        StreamData.Thumbnail = output[2];
                     }
-
-                    StreamData.IsNetwork = true;
                 }
                 catch
                 {
@@ -268,35 +201,22 @@ namespace Ranka.Utils
             // Network file.
             else if (verifyURL == true)
             {
-                // youtube-dl
-                Process youtubedl;
+                // Figure out if its a direct path to a file
+                bool directLink = Regex.IsMatch(path, "^.*\\.(wav|flac|alas|aac|m4a|webm|mp4|mp3|ogg)$");
 
                 try
                 {
-                    // Get Video Title
-                    ProcessStartInfo youtubedlMetaData = new ProcessStartInfo()
+                    if (directLink)
                     {
-                        FileName = "youtube-dl",
-                        Arguments = $"-s -e {path}",// Add more flags for more options.
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        UseShellExecute = false
-                    };
-                    youtubedl = Process.Start(youtubedlMetaData);
-                    youtubedl.WaitForExit();
-
-                    // Read the output of the simulation
-                    string[] output = youtubedl.StandardOutput.ReadToEnd().Split('\n');
-
-                    // Set the file name.
-                    StreamData.FileName = path;
-
-                    // Extract each line printed for it's corresponding data.
-                    if (output.Length > 0)
-                        StreamData.Title = output[0];
-
-                    // Set other properties as follows.
-                    StreamData.IsNetwork = true;
+                        StreamData.FileName = path;
+                        StreamData.Title = path.Replace("?:[^/][\\d\\w\\.] +)$(?<=\\.\\w{ 3,4})", "");
+                        StreamData.Description = $"A media file";
+                        StreamData.Thumbnail = "https://www.shareicon.net/data/512x512/2016/07/26/802170_mp3_512x512.png"; // Can't be arsed
+                    }
+                    else
+                    {
+                        YoutubeDLMetadata(path, StreamData);
+                    }
                 }
                 catch
                 {
@@ -304,8 +224,38 @@ namespace Ranka.Utils
                 }
             }
 
-            await Task.Delay(0);
+            await Task.Delay(0).ConfigureAwait(false);
             return StreamData;
+        }
+
+        private void YoutubeDLMetadata(string path, MidoFile StreamData)
+        {
+            Process youtubedl;
+            // Get Video Title
+            ProcessStartInfo youtubedlMetaData = new ProcessStartInfo()
+            {
+                FileName = "youtube-dl",
+                Arguments = $"-s -e --get-description --get-thumbnail {path}",// Add more flags for more options.
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+            youtubedl = Process.Start(youtubedlMetaData);
+            youtubedl.WaitForExit();
+
+            // Read the output of the simulation
+            string[] output = youtubedl.StandardOutput.ReadToEnd().Split('\n');
+
+            // Set the file name.
+            StreamData.FileName = path;
+
+            // Extract each line printed for it's corresponding data.
+            if (output.Length > 0)
+            {
+                StreamData.Title = output[0];
+                StreamData.Description = output[2];
+                StreamData.Thumbnail = output[1];
+            }
         }
     }
 }

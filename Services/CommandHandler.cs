@@ -34,7 +34,7 @@ namespace Ranka.Services
         public async Task InstallCommandsAsync()
         {
             await _commands.AddModulesAsync(assembly: Assembly.GetEntryAssembly(),
-                                            services: _services);
+                                            services: _services).ConfigureAwait(false);
         }
 
         // For fun.
@@ -61,7 +61,11 @@ namespace Ranka.Services
             {
                 if (ctx.Message.Content.ToLower().Contains(response.Trigger))
                 {
-                    await ctx.Channel.SendMessageAsync(response.Response);
+                    if (response.Response.EndsWith(".JPEG"))
+                        await ctx.Channel.SendFileAsync(response.Response).ConfigureAwait(false);
+                    else
+                        await ctx.Channel.SendMessageAsync(response.Response).ConfigureAwait(false);
+
                     return;
                 }
             }
@@ -74,6 +78,11 @@ namespace Ranka.Services
 
             // Create a number to track where the prefix ends and the command begins
             int argPos = 0;
+            if (!messageParam.Author.IsBot)
+            {
+                var nonpfxctx = new SocketCommandContext(_client, message);
+                await MessageLogger(nonpfxctx, argPos).ConfigureAwait(false);
+            }
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
             if (!(message.HasCharPrefix(Char.Parse(_config["prefix"]), ref argPos) ||
@@ -81,7 +90,7 @@ namespace Ranka.Services
                 message.Author.IsBot)
             {
                 var nonpfxctx = new SocketCommandContext(_client, message);
-                await NonPrefixMessageHandler(nonpfxctx, argPos);
+                await NonPrefixMessageHandler(nonpfxctx, argPos).ConfigureAwait(false);
                 return;
             }
 
@@ -93,7 +102,16 @@ namespace Ranka.Services
             await _commands.ExecuteAsync(
                 context: context,
                 argPos: argPos,
-                services: _services);
+                services: _services).ConfigureAwait(false);
+        }
+
+        private async Task MessageLogger(SocketCommandContext ctx, int argPos)
+        {
+            var rootdir = AppDomain.CurrentDomain.BaseDirectory;
+
+            var logString = $"[{ctx.Message.Timestamp.UtcDateTime}][{ctx.Message.Author.Username}#{ctx.Message.Author.Discriminator}|{ctx.Message.Author.Id}] {ctx.Message.Content} [{ctx.Message.Channel.Name} ({ctx.Message.Channel.Id})][{ctx.Guild.Name} ({ctx.Guild.Id})]\n";
+
+            await File.AppendAllTextAsync($"{rootdir}log.{ctx.Guild.Id}.txt", logString).ConfigureAwait(false);
         }
 
         public async Task CommandExecutedAsync(Optional<CommandInfo> command, ICommandContext context, IResult result)
@@ -113,7 +131,7 @@ namespace Ranka.Services
             }
 
             // failure scenario, let's let the user know
-            await context.Channel.SendMessageAsync($"❌ **An error occurred!**\n{result.ErrorReason}");
+            await context.Channel.SendMessageAsync($"❌ **An error occurred!**\n{result.ErrorReason}").ConfigureAwait(false);
         }
     }
 }
